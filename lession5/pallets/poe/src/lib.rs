@@ -42,12 +42,9 @@ pub mod pallet {
 
     #[pallet::error]
     pub enum Error<T>{
-        ProofAlreadyExist,
-        ProofAlreadyClaimed,
+        ClaimAlreadyExist,
         ClaimNotExist,
         NotClaimOwner,
-        NoSuchProof,
-        NotProofOwner,
     }
 
     #[pallet::hooks]
@@ -63,7 +60,7 @@ pub mod pallet {
         ) -> DispatchResultWithPostInfo {
             let sender = ensure_signed(origin)?;
 
-            ensure!(!Proofs::<T>::contains_key(&claim), Error::<T>::ProofAlreadyExist);
+            ensure!(!Proofs::<T>::contains_key(&claim), Error::<T>::ClaimAlreadyExist);
 
             Proofs::<T>::insert(
                 &claim, 
@@ -75,22 +72,6 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
-        pub fn create_claim2(
-            origin: OriginFor<T>,
-            proof: Vec<u8>,
-        ) -> DispatchResult {
-
-            let sender = ensure_signed(origin)?;
-
-            ensure!(!Proofs::<T>::contains_key(&proof), Error::<T>::ProofAlreadyClaimed);
-            let current_block = <frame_system::Pallet<T>>::block_number();
-            Proofs::<T>::insert(&proof, (&sender, current_block));
-
-            Self::deposit_event(Event::ClaimCreated(sender, proof));
-            Ok(())
-        }
-
-        #[pallet::weight(0)]
         pub fn revoke_claim (
             origin: OriginFor<T>,
             claim: Vec<u8>
@@ -98,7 +79,6 @@ pub mod pallet {
             let sender = ensure_signed(origin)?;
 
             let (owner, _) = Proofs::<T>::get(&claim).ok_or(Error::<T>::ClaimNotExist)?;
-
             ensure!(owner == sender, Error::<T>::NotClaimOwner);
 
             Proofs::<T>::remove(&claim);
@@ -107,41 +87,24 @@ pub mod pallet {
             Ok(().into())
         }
 
-        #[pallet::weight(10_000)]
-        pub fn revoke_claim2(
-            origin: OriginFor<T>,
-            proof: Vec<u8>,
-        ) -> DispatchResult {
-
-            let sender = ensure_signed(origin)?;
-
-            ensure!(Proofs::<T>::contains_key(&proof), Error::<T>::NoSuchProof);
-            let (owner, _) = Proofs:: <T>::get(&proof).expect("ALl proofs must have an owner!");
-            ensure!(sender == owner, Error::<T>::NotProofOwner);
-            Proofs::<T>::remove(&proof);
-
-            Self::deposit_event(Event::ClaimRevoked(sender, proof));
-            Ok(())
-        }
-
-        #[pallet::weight(1_000)]
+        #[pallet::weight(0)]
         pub fn transfer_claim(
             origin: OriginFor<T>,
             receiver: T::AccountId,
-            proof: Vec<u8>,
+            claim: Vec<u8>,
         ) -> DispatchResult {
 
             let sender = ensure_signed(origin)?;
 
-            ensure!(Proofs::<T>::contains_key(&proof), Error::<T>::NoSuchProof);
-            let (owner, _) = Proofs::<T>::get(&proof).unwrap();
-            ensure!(sender == owner, Error::<T>::NotProofOwner);
+            ensure!(Proofs::<T>::contains_key(&claim), Error::<T>::ClaimNotExist);
+            let (owner, _) = Proofs::<T>::get(&claim).unwrap();
+            ensure!(sender == owner, Error::<T>::NotClaimOwner);
             let current_block = <frame_system::Pallet<T>>::block_number();
-            Proofs::<T>::mutate(&proof, |value| {
+            Proofs::<T>::mutate(&claim, |value| {
                 value.as_mut().unwrap().0 = receiver.clone();
                 value.as_mut().unwrap().1 = current_block;
             });
-            Self::deposit_event(Event::ClaimTransfered(sender, receiver, proof));
+            Self::deposit_event(Event::ClaimTransfered(sender, receiver, claim));
             Ok(())
         }
     }
